@@ -26,6 +26,14 @@ class BatchLoad:
         return [self.loader(img_file) for img_file in img_files]
 
 
+class Split:
+    def __init__(self, n_seq):
+        self.n_seq = n_seq
+
+    def __call__(self, x):
+        return x[:-self.n_seq], x[-self.n_seq:]
+
+
 class BatchToTensor:
 
     def __init__(self):
@@ -147,7 +155,7 @@ class MovingMNIST(data.Dataset):
         self.mnist = np.load(filename).astype(np.float32)
 
     def __getitem__(self, index):
-        return self.mnist[0, index:index + 1] / 255
+        return self.mnist[:, index:index + 1] / 255
 
     def __len__(self):
         return self.mnist.shape[1]
@@ -201,18 +209,16 @@ class ImageDir(data.Dataset):
 
 class TransformDataset(data.Dataset):
 
-    def __init__(self, dataset, transform=None, transform_target=None):
+    def __init__(self, dataset, transform=None):
         self.dataset = dataset
         self.transform = transform
-        self.transform_target = transform_target
 
     def __getitem__(self, index):
-        x, y = self.dataset[index]
+        item = self.dataset[index]
         if self.transform:
-            x = self.transform(x)
-        if self.transform_target:
-            y = self.transform_target
-        return x, y
+            return self.transform(item)
+        else:
+            return item
 
     def __len__(self):
         return len(self.dataset)

@@ -34,27 +34,44 @@ class Split:
         return x[:-self.n_seq], x[-self.n_seq:]
 
 
+class BatchApply:
+
+    def __init__(self, trans):
+        self.trans = trans
+
+    def __call__(self, xs):
+        return [self.trans(x) for x in xs]
+
+
 class BatchToTensor:
 
     def __init__(self):
         self.trans = transforms.ToTensor()
 
     def __call__(self, imgs):
-        return [self.trans(img) for img in imgs]
+        return torch.stack([self.trans(img) for img in imgs])
 
 
 def get_dataset(root, is_train=True):
     if is_train:
         transform_train = transforms.Compose([
             RandomSample(12, 5),
-            # BatchLoad(),
-            # BatchToTensor(),
+            BatchLoad(),
+            BatchApply(transforms.Resize(256)),
+            BatchToTensor(),
+            Split(6),
         ])
         dataset = SRADDataset(root)
         dataset = TransformDataset(dataset, transform=transform_train)
     else:
-        dataset = ImageDir(root)
-        dataset = TransformDataset(dataset, transform=None)
+        transform_test = transforms.Compose([
+            RandomSample(6, 5),
+            BatchLoad(),
+            BatchApply(transforms.Resize(256)),
+            BatchToTensor(),
+        ])
+        dataset = SRADDataset(root)
+        dataset = TransformDataset(dataset, transform=transform_test)
 
     return dataset
 
@@ -166,8 +183,12 @@ class SRADDataset(data.Dataset):
     def __init__(self, root):
         self.samples = SRADDataset.make_samples(root, 1)
 
+    def get_id(self, index):
+        seq, seq_id = self.samples[index]
+        return seq_id
+
     def __getitem__(self, index):
-        return self.samples[index]
+        return self.samples[index][0]
 
     def __len__(self):
         return len(self.samples)

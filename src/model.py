@@ -179,7 +179,10 @@ class BaselineModel(nn.Module):
             RNNUpConv2d(64, 32),
             RNNUpConv2d(32, 16),
         )
-        self.out_conv = nn.Conv2d(16, out_ch, 1)
+        self.out_conv = nn.Sequential(
+            nn.Conv2d(16, out_ch, 1),
+            nn.Sigmoid(),
+        )
 
     def forward(self, xs, state=None):
         if self.batch_first:

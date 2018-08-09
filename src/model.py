@@ -3,6 +3,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class RNNConv2d(nn.Module):
+
+    def __init__(self, in_ch, out_ch, kernel_size):
+        super().__init__()
+        self.hidden_size = in_ch * kernel_size * kernel_size
+
+        self.in_ch = in_ch
+        self.out_ch = out_ch
+        self.groups = self.out_ch
+        self.kernel_size = kernel_size
+        self.rnn = nn.LSTMCell(self.hidden_size, self.hidden_size)
+
+    def forward(self, x, state):
+        if state is None:
+            w = x.new_zeros((1, self.hidden_size))
+            state = x.new_zeros((1, self.hidden_size))
+            state = state, state
+        else:
+            w, state = state
+        state = self.rnn(w, state)
+        w, _ = state
+
+        w = w.view(self.in_ch, 1, self.kernel_size, self.kernel_size)
+        x = F.conv2d(x, w, padding=1, groups=self.groups)
+        w = w.view(1, -1)
+        return x, (w, state)
+
+
+class RNNUpConv2d(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.conv = UpConv2d(in_ch, out_ch)
+        self.lstm = RNNConv2d(out_ch, out_ch, 3)
+
+    def forward(self, inputs):
+        xs, ss = inputs
+        xs = self.conv(xs)
+        x, s = self.lstm(xs.pop(), ss.pop(0))
+        xs.append(x)
+        ss.append(s)
+        return xs, ss
+
+
 class LSTMConv2d(nn.Module):
 
     def __init__(self, in_ch, h_ch):
@@ -32,7 +75,7 @@ class LSTMConv2d(nn.Module):
         cell = f * cell + i * g
         hidden = o * torch.tanh(cell)
 
-        return hidden, cell
+        return hidden, (hidden, cell)
 
 
 class SimpleConv2d(nn.Module):
@@ -97,7 +140,7 @@ class LSTMDownConv2d(nn.Module):
         xs = self.conv(xs)
         x, s = self.lstm(xs.pop(), ss.pop(0))
         xs.append(x)
-        ss.append((x, s))
+        ss.append(s)
         return xs, ss
 
 
@@ -112,7 +155,7 @@ class LSTMUpConv2d(nn.Module):
         xs = self.conv(xs)
         x, s = self.lstm(xs.pop(), ss.pop(0))
         xs.append(x)
-        ss.append((x, s))
+        ss.append(s)
         return xs, ss
 
 
@@ -132,9 +175,9 @@ class BaselineModel(nn.Module):
             LSTMDownConv2d(64, 64),
         )
         self.up = nn.Sequential(
-            LSTMUpConv2d(64, 64),
-            LSTMUpConv2d(64, 32),
-            LSTMUpConv2d(32, 16),
+            RNNUpConv2d(64, 64),
+            RNNUpConv2d(64, 32),
+            RNNUpConv2d(32, 16),
         )
         self.out_conv = nn.Conv2d(16, out_ch, 1)
 
@@ -152,6 +195,8 @@ class BaselineModel(nn.Module):
             x = self.in_conv(x)
             x = [x], down_state
             x, down_state = self.down(x)
+            # x = self.down([x])
+            # x = self.up(x)
             x = x, up_state
             x, up_state = self.up(x)
             x = x[0]
@@ -161,6 +206,8 @@ class BaselineModel(nn.Module):
             x = self.in_conv(x)
             x = [x], down_state
             x, down_state = self.down(x)
+            # x = self.down([x])
+            # self.up(x)
             x = x, up_state
             x, up_state = self.up(x)
             x = x[0]

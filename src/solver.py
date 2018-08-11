@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch.utils.data as data
 from torch.utils.data.dataset import random_split
@@ -19,10 +21,13 @@ class Solver:
         print("total:{}, n_train:{}, n_val:{}".format(len(dataset), len(dataset_train), len(dataset_val)))
         loader_train = data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
         loader_val = data.DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
+        if print_cnt != 0:
+            print_cnt = len(loader_train) // print_cnt + 1
         for i in range(1, n_epochs + 1):
             total_loss = 0
             cnt = 0
-            n = 0
+            n_cnt = print_cnt
+            start_time = time.time()
             for x, y in loader_train:
                 x = x.to(self.device)
                 y = y.to(self.device)
@@ -34,19 +39,20 @@ class Solver:
                 self.model.zero_grad()
                 loss.backward()
                 self.optim.step()
-                cnt += batch_size
-                n += batch_size
-                if 0 < print_cnt < cnt:
-                    cnt -= print_cnt
-                    print("epoch:{} {}, loss:{}".format(i, n / n_train, loss.item()))
+                cnt += 1
+                if 0 < n_cnt <= cnt:
+                    n_cnt += print_cnt
+                    torch.save(self.model.state_dict(), "w.h5")
+                    print("epoch:{} {}, loss:{}, time:{}".format(i, cnt / len(loader_train), loss.item(),
+                                                                 time.time() - start_time))
 
-            total_metric = 0
-            with torch.no_grad():
-                for x, y in loader_val:
-                    x = x.to(self.device)
-                    y = y.to(self.device)
-
-                    y_pred = self.model(x)
-                    total_metric += self.metric_fn(y_pred, y)
-
-            print("epoch:{} loss:{} metric:{}".format(i, total_loss / n_train, total_metric / n_val))
+            # total_metric = 0
+            # with torch.no_grad():
+            #     for x, y in loader_val:
+            #         x = x.to(self.device)
+            #         y = y.to(self.device)
+            #
+            #         y_pred = self.model(x)
+            #         total_metric += self.metric_fn(y_pred, y)
+            #
+            # print("epoch:{} loss:{} metric:{}".format(i, total_loss / n_train, total_metric / n_val))

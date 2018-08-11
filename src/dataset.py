@@ -34,33 +34,52 @@ class BatchApply:
         return [self.trans(x) for x in xs]
 
 
-def get_dataset(root, is_train=True):
+def moving_mnist_dataset(root, is_train=True):
+    if is_train:
+        transform = transforms.Compose([
+            RandomSample(12, 1),
+            torch.from_numpy,
+            Split(6),
+        ])
+    else:
+        transform = transforms.Compose([
+            RandomSample(6, 1),
+            torch.from_numpy,
+        ])
+
+    dataset = MovingMNIST(root)
+    dataset = TransformDataset(dataset, transform)
+
+    return dataset
+
+
+def srad_dataset(root, is_train=True, size=256):
     from torchvision.datasets.folder import default_loader
+    from PIL import Image
 
     if is_train:
-        transform_train = transforms.Compose([
+        transform = transforms.Compose([
             # srad is one sample per 6 minutes, so this will make 12 samples of interval 5 * 6 minutes
             RandomSample(12, 5),
             BatchApply(default_loader),
             BatchApply(transforms.Grayscale()),
-            BatchApply(transforms.Resize(256)),
+            BatchApply(transforms.Resize(size, interpolation=Image.NEAREST)),
             BatchApply(transforms.ToTensor()),
             torch.stack,
             Split(6),
         ])
-        dataset = SRADDataset(root)
-        dataset = TransformDataset(dataset, transform=transform_train)
     else:
-        transform_test = transforms.Compose([
+        transform = transforms.Compose([
             RandomSample(6, 5),
             BatchApply(default_loader),
             BatchApply(transforms.Grayscale()),
-            BatchApply(transforms.Resize(256)),
+            BatchApply(transforms.Resize(size, interpolation=Image.NEAREST)),
             BatchApply(transforms.ToTensor()),
             torch.stack,
         ])
-        dataset = SRADDataset(root)
-        dataset = TransformDataset(dataset, transform=transform_test)
+
+    dataset = SRADDataset(root)
+    dataset = TransformDataset(dataset, transform=transform)
 
     return dataset
 

@@ -17,15 +17,6 @@ class RandomSample:
         return samples[s: s + n: self.step]
 
 
-class BatchLoad:
-    def __init__(self):
-        from torchvision.datasets.folder import default_loader
-        self.loader = default_loader
-
-    def __call__(self, img_files):
-        return [self.loader(img_file) for img_file in img_files]
-
-
 class Split:
     def __init__(self, n_seq):
         self.n_seq = n_seq
@@ -43,22 +34,18 @@ class BatchApply:
         return [self.trans(x) for x in xs]
 
 
-class BatchToTensor:
-
-    def __init__(self):
-        self.trans = transforms.ToTensor()
-
-    def __call__(self, imgs):
-        return torch.stack([self.trans(img) for img in imgs])
-
-
 def get_dataset(root, is_train=True):
+    from torchvision.datasets.folder import default_loader
+
     if is_train:
         transform_train = transforms.Compose([
+            # srad is one sample per 6 minutes, so this will make 12 samples of interval 5 * 6 minutes
             RandomSample(12, 5),
-            BatchLoad(),
+            BatchApply(default_loader),
+            BatchApply(transforms.Grayscale()),
             BatchApply(transforms.Resize(256)),
-            BatchToTensor(),
+            BatchApply(transforms.ToTensor()),
+            torch.stack,
             Split(6),
         ])
         dataset = SRADDataset(root)
@@ -66,9 +53,11 @@ def get_dataset(root, is_train=True):
     else:
         transform_test = transforms.Compose([
             RandomSample(6, 5),
-            BatchLoad(),
+            BatchApply(default_loader),
+            BatchApply(transforms.Grayscale()),
             BatchApply(transforms.Resize(256)),
-            BatchToTensor(),
+            BatchApply(transforms.ToTensor()),
+            torch.stack,
         ])
         dataset = SRADDataset(root)
         dataset = TransformDataset(dataset, transform=transform_test)

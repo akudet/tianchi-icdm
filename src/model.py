@@ -180,6 +180,23 @@ class UVAlign(RNNConv2dBase):
         super().__init__("UVAlign", in_ch, h_ch)
 
 
+class RainfallLoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.intervals = [0, 0.05, 0.10, 0.15, 0.20, 0.40, 1.01]
+        self.weights = [1, 2, 5, 10, 20, 1]
+        # self.weights = [20, 10, 5, 5, 1, 1]
+
+    def forward(self, y_pred, y_true):
+        mask = [y_true < interval for interval in self.intervals]
+        weight = [w * (u - l).to(torch.float32) for w, l, u in zip(self.weights, mask[:-1], mask[1:])]
+        weight = sum(weight)
+
+        loss = weight * (y_pred - y_true) ** 2
+        return torch.mean(loss)
+
+
 class BaselineModel(nn.Module):
 
     def __init__(self, in_ch, out_ch, n_seq, batch_first=False):
